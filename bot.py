@@ -24,7 +24,6 @@ ADD_TOKEN = 100  # Custom state for token conversation
 
 user_sessions = {}
 
-# Remove the cancel handler function
 def get_live_domain():
     return LIVE_DOMAIN_PATH.read_text().strip()
 
@@ -43,7 +42,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions.pop(update.effective_chat.id, None)
     context.user_data.clear()
     await update.message.reply_text("❌ Operation cancelled.")
-    return ConversationHandler.END  # <--- this is crucial!
+    return ConversationHandler.END
 
 async def createuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please enter desired username (e.g., `john`):")
@@ -147,7 +146,6 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    # Remove the cancel handler and all /cancel command references
     app.add_handler(CommandHandler("setdomain", setdomain))
 
     # Handler for creating user
@@ -167,7 +165,9 @@ def main():
     # Handler for updating token
     app.add_handler(ConversationHandler(
         entry_points=[CommandHandler("addnewtoken", addnewtoken)],
-        states={1: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_token)]},
+        states={
+            ADD_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_token)]
+        },
         fallbacks=[]
     ))
 
