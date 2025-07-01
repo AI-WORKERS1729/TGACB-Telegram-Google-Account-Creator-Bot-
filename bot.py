@@ -6,7 +6,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters,
     ConversationHandler, ContextTypes
 )
-from create_workspace_user import create_user, set_token_content, user_exists
+from create_workspace_user import create_user, set_token_content, user_exists, delete_user, delete_all_users
 from pathlib import Path
 from telegram.constants import ChatAction
 
@@ -24,6 +24,7 @@ ADD_TOKEN = 100  # Custom state for token conversation
 
 user_sessions = {}
 
+# Remove the cancel handler function
 def get_live_domain():
     return LIVE_DOMAIN_PATH.read_text().strip()
 
@@ -42,7 +43,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_sessions.pop(update.effective_chat.id, None)
     context.user_data.clear()
     await update.message.reply_text("❌ Operation cancelled.")
-    return ConversationHandler.END
+    return ConversationHandler.END  # <--- this is crucial!
 
 async def createuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please enter desired username (e.g., `john`):")
@@ -141,11 +142,34 @@ async def save_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Error: {e}")
     return ConversationHandler.END
 
+async def delete_single_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_CHAT_ID:
+        return await update.message.reply_text("⛔ Not authorized.")
+    parts = update.message.text.split()
+    if len(parts) != 2:
+        return await update.message.reply_text("Usage: /delete <email>")
+    email = parts[1].strip()
+    if delete_user(email):
+        await update.message.reply_text(f"✅ User {email} deleted.")
+    else:
+        await update.message.reply_text(f"❌ Failed to delete user {email}.")
+
+async def delete_all_users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ADMIN_CHAT_ID:
+        return await update.message.reply_text("⛔ Not authorized.")
+    domain = get_live_domain()
+    await update.message.reply_text("⚠️ Deleting all users in domain. This may take a while...")
+    if delete_all_users(domain):
+        await update.message.reply_text("✅ All users deleted.")
+    else:
+        await update.message.reply_text("❌ Failed to delete all users.")
+
 def main():
     print("[INFO] Telegram bot is running. Press Ctrl+C to stop.")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    # Remove the cancel handler and all /cancel command references
     app.add_handler(CommandHandler("setdomain", setdomain))
 
     # Handler for creating user
@@ -165,11 +189,12 @@ def main():
     # Handler for updating token
     app.add_handler(ConversationHandler(
         entry_points=[CommandHandler("addnewtoken", addnewtoken)],
-        states={
-            ADD_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_token)]
-        },
+        states={ADD_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_token)]},
         fallbacks=[]
     ))
+
+    app.add_handler(CommandHandler("delete", delete_single_user))
+    app.add_handler(CommandHandler("deleteall", delete_all_users_cmd))
 
     app.run_polling()
 
