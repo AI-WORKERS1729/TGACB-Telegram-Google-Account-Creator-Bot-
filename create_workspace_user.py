@@ -52,3 +52,29 @@ def user_exists(email):
         if "Resource Not Found" in str(e) or "notFound" in str(e):
             return False
         return None
+
+def delete_user(email):
+    try:
+        creds = load_credentials()
+        service = build("admin", "directory_v1", credentials=creds)
+        service.users().delete(userKey=email).execute()
+        return True
+    except Exception as e:
+        print(f"Error deleting user: {e}")
+        return False
+
+def delete_all_users(domain):
+    try:
+        creds = load_credentials()
+        service = build("admin", "directory_v1", credentials=creds)
+        users = service.users().list(domain=domain, maxResults=500, orderBy='email').execute().get('users', [])
+        for user in users:
+            email = user['primaryEmail']
+            try:
+                service.users().delete(userKey=email).execute()
+            except Exception as e:
+                print(f"Error deleting user {email}: {e}")
+        return True
+    except Exception as e:
+        print(f"Error deleting all users: {e}")
+        return False
